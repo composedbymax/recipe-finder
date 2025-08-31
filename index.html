@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe App</title>
+    <style>
+        body{font-family: Arial, sans-serif;margin: 0;padding: 0;}
+        header{background-color: #4CAF50;color: white;text-align: center;padding: 1rem;}
+        main{padding: 1rem;}
+        section{margin-bottom: 2rem;}
+        input{padding: 0.5rem;margin-right: 0.5rem;}
+        button{padding: 0.5rem 1rem;margin-right: 0.5rem;}
+        .recipe{border: 1px solid #ddd;padding: 1rem;margin: 1rem 0;}
+        .recipe img{max-width: 100%;}
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Recipe App</h1>
+    </header>
+    <main>
+        <section class="search">
+            <input type="text" id="ingredientInput" placeholder="Enter ingredient(s)">
+            <button id="searchBtn">Search</button>
+            <button id="randomBtn">Random Recipe</button>
+        </section>
+        <section class="recipes">
+            <h2>Results</h2>
+            <div id="results"></div>
+        </section>
+        <section class="saved">
+            <h2>Saved Recipes</h2>
+            <div id="savedRecipes"></div>
+        </section>
+    </main>
+    <template id="recipeTemplate">
+        <div class="recipe">
+            <h3 class="recipe-title"></h3>
+            <img class="recipe-img" src="" alt="Recipe Image">
+            <p class="recipe-instructions"></p>
+            <button class="saveBtn">Save</button>
+            <button class="editBtn">Edit</button>
+        </div>
+    </template>
+    <script>
+        let db;
+        const request = indexedDB.open('RecipeDB', 1);
+        request.onupgradeneeded = function(e) {
+            db = e.target.result;
+            const store = db.createObjectStore('recipes', { keyPath: 'idMeal' });
+            store.createIndex('name', 'strMeal', { unique: false });
+        };
+        request.onsuccess = function(e) {
+            db = e.target.result;
+            displaySavedRecipes();
+        };
+        request.onerror = function(e) {
+            console.error('IndexedDB error', e);
+        };
+        async function fetchRecipes(query) {
+            let endpoint;
+            if (!query || query === 'random') {
+                endpoint = 'https://www.themealdb.com/api/json/v1/1/random.php';
+            } else {
+                endpoint = `https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}`;
+            }
+            const res = await fetch(endpoint);
+            const data = await res.json();
+            displayRecipes(data.meals || []);
+        }
+        function displayRecipes(recipes) {
+            const results = document.getElementById('results');
+            results.innerHTML = '';
+            const template = document.getElementById('recipeTemplate');
+            recipes.forEach(recipe => {
+                const clone = template.content.cloneNode(true);
+                clone.querySelector('.recipe-title').textContent = recipe.strMeal;
+                clone.querySelector('.recipe-img').src = recipe.strMealThumb;
+                clone.querySelector('.recipe-instructions').textContent = recipe.strInstructions;
+                clone.querySelector('.saveBtn').addEventListener('click', () => saveRecipe(recipe));
+                clone.querySelector('.editBtn').addEventListener('click', () => editRecipe(recipe));
+                results.appendChild(clone);
+            });
+        }
+        function saveRecipe(recipe) {
+            const tx = db.transaction('recipes', 'readwrite');
+            const store = tx.objectStore('recipes');
+            store.put(recipe);
+            tx.oncomplete = () => displaySavedRecipes();
+        }
+        function displaySavedRecipes() {
+            const tx = db.transaction('recipes', 'readonly');
+            const store = tx.objectStore('recipes');
+            const savedRecipes = document.getElementById('savedRecipes');
+            savedRecipes.innerHTML = '';
+            store.openCursor().onsuccess = function(e) {
+                const cursor = e.target.result;
+                if (cursor) {
+                    const recipe = cursor.value;
+                    const div = document.createElement('div');
+                    div.className = 'recipe';
+                    div.innerHTML = `
+                        <h3>${recipe.strMeal}</h3>
+                        <img src="${recipe.strMealThumb}" alt="Recipe Image">
+                        <p>${recipe.strInstructions}</p>
+                        <button class="editBtn">Edit</button>
+                    `;
+                    div.querySelector('.editBtn').addEventListener('click', () => editRecipe(recipe));
+                    savedRecipes.appendChild(div);
+                    cursor.continue();
+                }
+            };
+        }
+        function editRecipe(recipe) {
+            const newInstructions = prompt('Edit instructions:', recipe.strInstructions);
+            if (newInstructions !== null) {
+                recipe.strInstructions = newInstructions;
+                const tx = db.transaction('recipes', 'readwrite');
+                const store = tx.objectStore('recipes');
+                store.put(recipe);
+                tx.oncomplete = () => displaySavedRecipes();
+            }
+        }
+        document.getElementById('searchBtn').addEventListener('click', () => {
+            const query = document.getElementById('ingredientInput').value.trim();
+            fetchRecipes(query);
+        });
+        document.getElementById('randomBtn').addEventListener('click', () => fetchRecipes('random'));
+    </script>
+</body>
+</html>
