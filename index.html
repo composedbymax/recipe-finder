@@ -1,72 +1,63 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recipe App</title>
-    <style>
-        body{font-family: Arial, sans-serif;margin: 0;padding: 0;}
-        header{background-color: #4CAF50;color: white;text-align: center;padding: 1rem;}
-        main{padding: 1rem;}
-        section{margin-bottom: 2rem;}
-        input{padding: 0.5rem;margin-right: 0.5rem;}
-        button{padding: 0.5rem 1rem;margin-right: 0.5rem;}
-        .recipe{border: 1px solid #ddd;padding: 1rem;margin: 1rem 0;}
-        .recipe img{max-width: 100%;}
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recipe App</title>
+<style>
+body { font-family: Arial, sans-serif; margin:0; padding:0; }
+header { background:#4CAF50; color:#fff; text-align:center; padding:1rem; }
+main { padding:1rem; }
+section { margin-bottom:2rem; }
+input, button { padding:0.5rem; margin-right:0.5rem; }
+.recipe { border:1px solid #ddd; padding:1rem; margin:1rem 0; }
+.recipe img { max-width:100%; }
+ul { padding-left: 1.5rem; }
+</style>
 </head>
 <body>
-    <header>
-        <h1>Recipe App</h1>
-    </header>
-    <main>
-        <section class="search">
-            <input type="text" id="ingredientInput" placeholder="Enter ingredient(s)">
-            <button id="searchBtn">Search</button>
-            <button id="randomBtn">Random Recipe</button>
-        </section>
-        <section class="recipes">
-            <h2>Results</h2>
-            <div id="results"></div>
-        </section>
-        <section class="saved">
-            <h2>Saved Recipes</h2>
-            <div id="savedRecipes"></div>
-        </section>
-    </main>
-    <template id="recipeTemplate">
-        <div class="recipe">
-            <h3 class="recipe-title"></h3>
-            <img class="recipe-img" src="" alt="Recipe Image">
-            <p class="recipe-instructions"></p>
-            <button class="saveBtn">Save</button>
-            <button class="editBtn">Edit</button>
-        </div>
-    </template>
+<header><h1>Recipe App</h1></header>
+<main>
+<section class="search">
+<input id="ingredientInput" placeholder="Enter ingredient(s)">
+<button id="searchBtn">Search</button>
+<button id="randomBtn">Random Recipe</button>
+</section>
+<section class="recipes">
+<h2>Results</h2>
+<div id="results"></div>
+</section>
+<section class="saved">
+<h2>Saved Recipes</h2>
+<div id="savedRecipes"></div>
+</section>
+<template id="recipeTemplate">
+<div class="recipe">
+<h3 class="recipe-title"></h3>
+<img class="recipe-img" src="" alt="Recipe Image">
+<h4>Ingredients:</h4>
+<ul class="recipe-ingredients"></ul>
+<h4>Instructions:</h4>
+<ol class="recipe-instructions"></ol>
+<button class="saveBtn">Save</button>
+<button class="editBtn">Edit</button>
+</div>
+</template>
     <script>
         let db;
         const request = indexedDB.open('RecipeDB', 1);
-        request.onupgradeneeded = function(e) {
+        request.onupgradeneeded = e => {
             db = e.target.result;
             const store = db.createObjectStore('recipes', { keyPath: 'idMeal' });
-            store.createIndex('name', 'strMeal', { unique: false });
+            store.createIndex('name', 'strMeal', { unique:false });
         };
-        request.onsuccess = function(e) {
-            db = e.target.result;
-            displaySavedRecipes();
-        };
-        request.onerror = function(e) {
-            console.error('IndexedDB error', e);
-        };
+        request.onsuccess = e => { db = e.target.result; displaySavedRecipes(); };
+        request.onerror = e => console.error('IndexedDB error', e);
         async function fetchRecipes(query) {
-            let endpoint;
-            if (!query || query === 'random') {
-                endpoint = 'https://www.themealdb.com/api/json/v1/1/random.php';
-            } else {
-                endpoint = `https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}`;
-            }
-            const res = await fetch(endpoint);
-            const data = await res.json();
+            const endpoint = !query || query==='random'
+                ? 'https://www.themealdb.com/api/json/v1/1/random.php'
+                : `https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}`;
+            const data = await (await fetch(endpoint)).json();
             displayRecipes(data.meals || []);
         }
         function displayRecipes(recipes) {
@@ -77,56 +68,72 @@
                 const clone = template.content.cloneNode(true);
                 clone.querySelector('.recipe-title').textContent = recipe.strMeal;
                 clone.querySelector('.recipe-img').src = recipe.strMealThumb;
-                clone.querySelector('.recipe-instructions').textContent = recipe.strInstructions;
-                clone.querySelector('.saveBtn').addEventListener('click', () => saveRecipe(recipe));
-                clone.querySelector('.editBtn').addEventListener('click', () => editRecipe(recipe));
+                const ingredientsList = clone.querySelector('.recipe-ingredients');
+                for(let i=1;i<=20;i++){
+                    const ingredient = recipe['strIngredient'+i];
+                    const measure = recipe['strMeasure'+i];
+                    if(ingredient && ingredient.trim()!==''){
+                        const li = document.createElement('li');
+                        li.textContent = `${measure || ''} ${ingredient}`.trim();
+                        ingredientsList.appendChild(li);
+                    }
+                }
+                const instructionsList = clone.querySelector('.recipe-instructions');
+                recipe.strInstructions.split(/\r?\n/).forEach(step=>{
+                    if(step.trim()!==''){
+                        const li = document.createElement('li');
+                        li.textContent = step.trim();
+                        instructionsList.appendChild(li);
+                    }
+                });
+                clone.querySelector('.saveBtn').onclick = () => saveRecipe(recipe);
+                clone.querySelector('.editBtn').onclick = () => editRecipe(recipe);
                 results.appendChild(clone);
             });
         }
         function saveRecipe(recipe) {
-            const tx = db.transaction('recipes', 'readwrite');
-            const store = tx.objectStore('recipes');
-            store.put(recipe);
-            tx.oncomplete = () => displaySavedRecipes();
+            const tx = db.transaction('recipes','readwrite');
+            tx.objectStore('recipes').put(recipe);
+            tx.oncomplete = displaySavedRecipes;
         }
         function displaySavedRecipes() {
-            const tx = db.transaction('recipes', 'readonly');
+            const tx = db.transaction('recipes','readonly');
             const store = tx.objectStore('recipes');
-            const savedRecipes = document.getElementById('savedRecipes');
-            savedRecipes.innerHTML = '';
-            store.openCursor().onsuccess = function(e) {
+            const saved = document.getElementById('savedRecipes');
+            saved.innerHTML = '';
+            store.openCursor().onsuccess = e => {
                 const cursor = e.target.result;
-                if (cursor) {
-                    const recipe = cursor.value;
-                    const div = document.createElement('div');
-                    div.className = 'recipe';
-                    div.innerHTML = `
-                        <h3>${recipe.strMeal}</h3>
-                        <img src="${recipe.strMealThumb}" alt="Recipe Image">
-                        <p>${recipe.strInstructions}</p>
-                        <button class="editBtn">Edit</button>
-                    `;
-                    div.querySelector('.editBtn').addEventListener('click', () => editRecipe(recipe));
-                    savedRecipes.appendChild(div);
-                    cursor.continue();
+                if(!cursor) return;
+                const r = cursor.value;
+                const div = document.createElement('div');
+                div.className='recipe';
+                const ingredients = [];
+                for(let i=1;i<=20;i++){
+                    const ing = r['strIngredient'+i], measure = r['strMeasure'+i];
+                    if(ing && ing.trim()!=='') ingredients.push(`${measure || ''} ${ing}`.trim());
                 }
+                const instructionsSteps = r.strInstructions.split(/\r?\n/).filter(s=>s.trim()!=='');
+                div.innerHTML = `<h3>${r.strMeal}</h3>
+                    <img src="${r.strMealThumb}" alt="Recipe Image">
+                    <h4>Ingredients:</h4>
+                    <ul>${ingredients.map(i=>`<li>${i}</li>`).join('')}</ul>
+                    <h4>Instructions:</h4>
+                    <ol>${instructionsSteps.map(i=>`<li>${i}</li>`).join('')}</ol>
+                    <button class="editBtn">Edit</button>`;
+                div.querySelector('.editBtn').onclick = () => editRecipe(r);
+                saved.appendChild(div);
+                cursor.continue();
             };
         }
         function editRecipe(recipe) {
             const newInstructions = prompt('Edit instructions:', recipe.strInstructions);
-            if (newInstructions !== null) {
+            if(newInstructions !== null){
                 recipe.strInstructions = newInstructions;
-                const tx = db.transaction('recipes', 'readwrite');
-                const store = tx.objectStore('recipes');
-                store.put(recipe);
-                tx.oncomplete = () => displaySavedRecipes();
+                saveRecipe(recipe);
             }
         }
-        document.getElementById('searchBtn').addEventListener('click', () => {
-            const query = document.getElementById('ingredientInput').value.trim();
-            fetchRecipes(query);
-        });
-        document.getElementById('randomBtn').addEventListener('click', () => fetchRecipes('random'));
+        document.getElementById('searchBtn').onclick = () => fetchRecipes(document.getElementById('ingredientInput').value.trim());
+        document.getElementById('randomBtn').onclick = () => fetchRecipes('random');
     </script>
 </body>
 </html>
