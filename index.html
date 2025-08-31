@@ -24,41 +24,56 @@
     .recipe .saveBtn:hover{background-color: #1976D2;}
     .recipe .editBtn{background-color: #FF9800;}
     .recipe .editBtn:hover{background-color: #FB8C00;}
+    .pagination{text-align: center;margin-top: 2rem;}
+    .pagination button{background-color: #6B73FF;font-size: 1.1rem;padding: 0.8rem 1.5rem;border-radius: 50px;display: inline-flex;align-items: center;gap: 0.5rem;}
+    .pagination button:hover{background-color: #5A63E8;}
+    .pagination button:disabled{background-color: #ccc;cursor: not-allowed;transform: none;}
+    .pagination button:disabled:hover{background-color: #ccc;transform: none;}
+    .arrow{font-size: 1.2rem;}
     @media (max-width: 600px){input{width: 100%;margin-bottom: 0.5rem;}
     button{width: 100%;margin-bottom: 0.5rem;}}
 </style>
 </head>
 <body>
-<header><h1>Recipe App</h1></header>
-<main>
-<section class="search">
-<input id="ingredientInput" placeholder="Enter ingredient(s)">
-<button id="searchBtn">Search</button>
-<button id="randomBtn">Random Recipe</button>
-</section>
-<section class="recipes">
-<h2>Results</h2>
-<div id="results"></div>
-</section>
-<section class="saved">
-<h2>Saved Recipes</h2>
-<div id="savedRecipes"></div>
-</section>
-<template id="recipeTemplate">
-<div class="recipe">
-<h3 class="recipe-title"></h3>
-<img class="recipe-img" src="" alt="Recipe Image">
-<iframe class="recipe-video" frameborder="0" allowfullscreen></iframe>
-<h4>Ingredients:</h4>
-<ul class="recipe-ingredients"></ul>
-<h4>Instructions:</h4>
-<ol class="recipe-instructions"></ol>
-<button class="saveBtn">Save</button>
-<button class="editBtn">Edit</button>
-</div>
-</template>
+    <header><h1>Recipe App</h1></header>
+    <main>
+        <section class="search">
+            <input id="ingredientInput" placeholder="Enter ingredient(s)">
+            <button id="searchBtn">Search</button>
+            <button id="randomBtn">Random Recipe</button>
+        </section>
+        <section class="recipes">
+            <h2>Results</h2>
+            <div id="results"></div>
+            <div class="pagination">
+                <button id="loadMoreBtn" style="display: none;">
+                    Load More <span class="arrow">→</span>
+                </button>
+            </div>
+        </section>
+        <section class="saved">
+            <h2>Saved Recipes</h2>
+            <div id="savedRecipes"></div>
+        </section>
+        <template id="recipeTemplate">
+            <div class="recipe">
+                <h3 class="recipe-title"></h3>
+                <img class="recipe-img" src="" alt="Recipe Image">
+                <iframe class="recipe-video" frameborder="0" allowfullscreen></iframe>
+                <h4>Ingredients:</h4>
+                <ul class="recipe-ingredients"></ul>
+                <h4>Instructions:</h4>
+                <ol class="recipe-instructions"></ol>
+                <button class="saveBtn">Save</button>
+                <button class="editBtn">Edit</button>
+            </div>
+        </template>
+    </main>
     <script>
         let db;
+        let allRecipes = [];
+        let displayedCount = 0;
+        const RECIPES_PER_PAGE = 15;
         const request = indexedDB.open('RecipeDB', 1);
         request.onupgradeneeded = e => {
             db = e.target.result;
@@ -82,7 +97,21 @@
                 ? 'https://www.themealdb.com/api/json/v1/1/random.php'
                 : `https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(query)}`;
             const data = await (await fetch(endpoint)).json();
-            displayRecipes(data.meals || []);
+            allRecipes = data.meals || [];
+            displayedCount = 0;
+            document.getElementById('results').innerHTML = '';
+            displayNextBatch();
+        }
+        function displayNextBatch() {
+            const recipesToShow = allRecipes.slice(displayedCount, displayedCount + RECIPES_PER_PAGE);
+            displayRecipes(recipesToShow, true);
+            displayedCount += recipesToShow.length;
+            const loadMoreBtn = document.getElementById('loadMoreBtn');
+            if (displayedCount < allRecipes.length) {
+                loadMoreBtn.style.display = 'block';
+            } else {
+                loadMoreBtn.style.display = 'none';
+            }
         }
         function parseInstructions(raw) {
             const steps = [];
@@ -96,9 +125,9 @@
             });
             return steps;
         }
-        function displayRecipes(recipes) {
+        function displayRecipes(recipes, append = false) {
             const results = document.getElementById('results');
-            results.innerHTML = '';
+            if (!append) results.innerHTML = '';
             const template = document.getElementById('recipeTemplate');
             recipes.forEach(recipe => {
                 const clone = template.content.cloneNode(true);
@@ -178,6 +207,7 @@
         }
         document.getElementById('searchBtn').onclick = () => fetchRecipes(document.getElementById('ingredientInput').value.trim());
         document.getElementById('randomBtn').onclick = () => fetchRecipes('random');
+        document.getElementById('loadMoreBtn').onclick = displayNextBatch;
     </script>
 </body>
 </html>
