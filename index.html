@@ -60,6 +60,19 @@ ul { padding-left: 1.5rem; }
             const data = await (await fetch(endpoint)).json();
             displayRecipes(data.meals || []);
         }
+        function parseInstructions(raw) {
+            const steps = [];
+            if (!raw) return steps;
+            const lines = raw.split(/\r?\n|(?<=\.)\s*(?=\d+\.)/);
+            lines.forEach(line => {
+                let trimmed = line.trim();
+                if (!trimmed) return;
+                trimmed = trimmed.replace(/^(STEP\s*\d+|\d+\.)\s*/i, '').trim();
+
+                if (trimmed) steps.push(trimmed);
+            });
+            return steps;
+        }
         function displayRecipes(recipes) {
             const results = document.getElementById('results');
             results.innerHTML = '';
@@ -79,12 +92,10 @@ ul { padding-left: 1.5rem; }
                     }
                 }
                 const instructionsList = clone.querySelector('.recipe-instructions');
-                recipe.strInstructions.split(/\r?\n/).forEach(step=>{
-                    if(step.trim()!==''){
-                        const li = document.createElement('li');
-                        li.textContent = step.trim();
-                        instructionsList.appendChild(li);
-                    }
+                parseInstructions(recipe.strInstructions).forEach(step => {
+                    const li = document.createElement('li');
+                    li.textContent = step;
+                    instructionsList.appendChild(li);
                 });
                 clone.querySelector('.saveBtn').onclick = () => saveRecipe(recipe);
                 clone.querySelector('.editBtn').onclick = () => editRecipe(recipe);
@@ -112,7 +123,7 @@ ul { padding-left: 1.5rem; }
                     const ing = r['strIngredient'+i], measure = r['strMeasure'+i];
                     if(ing && ing.trim()!=='') ingredients.push(`${measure || ''} ${ing}`.trim());
                 }
-                const instructionsSteps = r.strInstructions.split(/\r?\n/).filter(s=>s.trim()!=='');
+                const instructionsSteps = parseInstructions(r.strInstructions);
                 div.innerHTML = `<h3>${r.strMeal}</h3>
                     <img src="${r.strMealThumb}" alt="Recipe Image">
                     <h4>Ingredients:</h4>
@@ -120,6 +131,7 @@ ul { padding-left: 1.5rem; }
                     <h4>Instructions:</h4>
                     <ol>${instructionsSteps.map(i=>`<li>${i}</li>`).join('')}</ol>
                     <button class="editBtn">Edit</button>`;
+
                 div.querySelector('.editBtn').onclick = () => editRecipe(r);
                 saved.appendChild(div);
                 cursor.continue();
